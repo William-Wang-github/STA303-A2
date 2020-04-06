@@ -1,0 +1,389 @@
+---
+title: "STA303: Assignment 2"
+author: "William Wang"
+output: 
+  pdf_document:
+    toc: TRUE
+    fig_width: 4.25
+    fig_height: 3.25
+  html_document:
+    toc: TRUE
+    fig_width: 3
+    fig_height: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup Code
+```{r, warning=FALSE, results='hide', message=FALSE, eval=FALSE}
+
+# Run code without comments to install required packages
+install.packages("lme4")
+install.packages("tidyverse")
+install.packages("Pmisc", repos = "http://R-Forge.R-project.org", type = "source")
+install.packages("glmmTMB")
+install.packages("lmtest")
+```
+
+```{r, warning=FALSE, results='hide', message=FALSE}
+library(`tidyverse`)
+library(`Pmisc`)
+library(`lme4`)
+library(`lmtest`)
+```
+
+## Question 1
+
+The file school.csv (available on Quercus) contains data on 992 Grade 8 students (i.e., most are 11 years old) in 58 primary schools in the Netherlands. The data are adapted from Snijders and Boskers’ Multilevel Analysis, 2nd Edition (Sage, 2012).
+
+                          Table 1: Variables in the school.csv data set
+
+| Variable        | Description                                             |
+|-----------------|---------------------------------------------------------|
+| school          | an ID number indicating which school the student attends|
+| test            | the student’s score on an end-of-year language test     |
+| iq              | the student’s verbal IQ score                           |
+| ses             | the socioeconomic status of the student’s family        |
+| sex             | the student’s sex, 1 is female and 0 is male            |
+| minority_status | 1 if the student is an ethnic minority, 0 otherwise     |
+
+**Question of interest: Which variables are associated with Grade 8 students’
+scores on an end-of-year language test?**
+
+Before we answer the questions lets create our data set for our analysis, this is seen in the code below
+
+```{r, warning=FALSE, message=FALSE}
+SchoolData <- read_csv("school.csv")
+```
+
+
+### Question 1a
+**Briefly describe why, without even looking at these data, you would have a concern about one of the assumptions of linear regression.**
+
+*Solution:*
+
+Without even looking at the data, i would have concerns about the independence assumptions for the linear regression. This is because, the scores students achieve is generally related to the quality of teachers, quality of education, and grading scheme/leniency of grading. All of these factors are highly related to the school the student attends, whereby different schools have different teachers which typically have wide variations in teaching, whether it be style, teaching ability or passion. Furthermore, the quality of the education can also vary, since differenet schools may have different focuses, or funding to allow for better education. Moreover, if different schools have different difficulties of grading, or non-standardized grading schemes then the scores vary between schools, and even the teachers within schools, though this could be solved if the students were writing a standardized test, and graded by a nationwide body, which we don't know. Thus, without even looking at the data, we have a few reasons to be concerned about our linear regression assumption about independence.
+
+### Question 1b
+**Create a scatter plot to examine the relationship between verbal IQ scores and end-of-year language scores. Include a line of best fit. Briefly describe what you see in the plot in the context of the question of interest.**
+
+*Solution:*
+
+The code and output of the plot can be seen below
+
+```{r}
+SchoolData %>%
+  ggplot(aes(x = iq, y = test)) + geom_point(alpha = 0.5) + geom_smooth(method = "lm", se = FALSE) + 
+  theme_classic()
+```
+
+Based on the plot above, we can see that there seems to be an overall trend upwards, meaning as `iq` increases, note that `iq` is normalized at 0 and corresponding number of standard deviations away from 0 is our iq score, the test score seems to also increase. Thus, in the context of our question of interest, it seems like there is some preliminary evidence that the verbal iq of a student could be associated with the end-of-year language test scores for 8th grade students, whereby increasing iq scores is associated with higher test scores, in general.
+
+
+### Question 1c
+**Create two new variables in the data set, `mean_ses` that is the mean of `ses` for each school, and `mean_iq` that is mean of `iq` for each school.**
+
+*Solution:*
+
+To create new variables we created a new data set called `NewSchoolData` and used the function `mutate()` to create our two new variables `mean_ses` and `mean_iq`, grouping by school using `group_by()`. The code and outputs are shown below:
+
+```{r}
+NewSchoolData <- SchoolData %>%
+  group_by(school) %>%
+  mutate(mean_ses = mean(ses)) %>% 
+  mutate(mean_iq = mean(iq))
+```
+
+These represent the means of the iq and ses values for each school.
+
+### Question 1d
+**Fit a linear model with `test` as the response and use `iq`, `sex`, `ses`, `minority_status`, `mean_ses` and `mean_iq` as the covariates. Show the code for the model you fit and the results of running `summary()` and `confint()` on the model you fit and briefly interpret the results. (A complete interpretation here should discuss what the intercept means, and for which subgroup of students it applies, as well as the location of the confidence intervals for each covariate, i.e. below 0, includes 0 or above zero. Address the question of interest.)**
+
+*Solution:*
+
+To fit a linear model we used the `lm()` function, and the code and outputs can be seen below:
+
+```{r}
+School_lm <- lm(test~iq + sex + ses + minority_status + mean_ses + mean_iq, data = NewSchoolData)
+
+summary(School_lm)
+
+confint(School_lm)
+```
+
+From the output above we will examine a few key points of interest. First, we can see that we have an interecept value of 38.45808, this means that if all the covariates are set to 0, i.e. we are looking at our reference/baseline individual of a non-minority male student with `ses` and `iq` of 0 at a specific school, i.e. the reference group, they would obtain a test score of 38.45808. Furthermore, each of the covariate estimates correspond to the additive amount that one additional unit increase in the respective variable would increase the intercept by, so for mean_iq, 1 additional unit increase in the mean iq for a school would result in a 1.42674 increase in the end-of-year language test score for an 8th grade individual at that school. We can also see that the p-values for every estimate except `minority_status` is less than the typical significance level of 0.05, with them being less than 0.00001. We can see a p-value of 0.861 for `minority_status` which is significantly greater than any reasonable significance level we could possibly choose, with the largest usually being 0.1, thus it is likely we cannot reject our null of this test for this covariate. Therefore, we cannot say with reasonable certainty that `minority_status` has any effect on the end-of-year language test scores for 8th grade students, i.e. whether it may be a non-zero coefficient.
+
+For the confidence intervals we can see that we have 95% CIs that do not contain 0 for all covariates except one, that being `minority_status`, this suggests that we have reasonable certainty that the estimated coefficients for most of the covariates are not equal to 0. For example, if we look at our CI for `iq`, we see an upper and lower of 2.52 and 2.05 respectively, this means that would expect that the reasonable range of values for our coefficient estimate for `iq` would be within that interval. Since 0 is not present in that interval, that would suggest that we do not have zero as a possible value, and thus would suggest that `iq` would have some non-zero effect on our response. Thus, applying similar logic to the other CIs, it looks like most of the covariates, except for `minority_status`, seem to have some effect on the response variable of test score, given that 0 does not lie within their reasonable range of possible values, i.e. their 95% CIs. Moreover, all of the covariates that do not contain zero lie above 0, except for `mean_ses`, this suggests that the covariates of `iq`, `sex`, `ses`, and `mean_iq`, all are likely to have a positive association with test score. Given that these 95% CIs all lie above 0, we have reasonable certainty that for every 1 unit increase in each of those covariates, or a dummy variable of 1 for sex, we would see an increase in the test score corresponding to the estimate. In the case of `mean_ses`, we can see that our estimate and CI lie below 0, this suggests that we would see a negative association with test scores, whereby a 1 unit increase in the mean ses score for a school would result in a 0.3066319 unit decrease in the test score for an individual at that school. 
+
+
+### Question 1e
+**Fit a linear mixed model with the same fixed effects as 1d and with a random intercept for school.**
+
+**Show the code for the model you fit and the results of running `summary()` and `confint()` on the model you fit and briefly interpret the results.**
+
+**Hint 1: Consider the estimated standard deviations in the summary to make sure you understand the first two rows of the confint output.**
+
+**Hint 2: If you want to suppress the ‘Computing profile confidence intervals …’ message you can use `message=FALSE` in the chunk.**`
+
+*Solution:*
+
+```{r linmixed}
+School_linmixed <- lmer(test~iq + sex + ses + minority_status + mean_ses + mean_iq + 
+                          (1 | school), data = NewSchoolData)
+
+summary(School_linmixed)
+
+confint(School_linmixed)
+```
+
+From the linear mixed model output we can see that we have a section for the fixed effects and as such we can interpret these coefficients similarly to part 1d). However, we can now see we have additional sections not included in our linear regression model, such as the random effects, fixed effect correlations and additional variables in the confidence intervals. First, the random effects section gives us the variance and standard deviations for our random effect variable `school`, which is the variability in the intercept due to `school`, and our residuals. These correspond to the the variance between the test scores for our students between schools and within schools. Thus, we can notice that it seems that there is a much larger variance within students in the school (i.e. the residual variance of 38.240) than between schools (the variance of random effect `school`, 8.177). From the std dev column, we can see that the standard deviation for `school` is 2.85, which means that if we increase our random effect by 1 unit/standard deviation we would expect that there would be a 2.85 unit change in the test score from one school to the next. This value is also greater than every covariate estimator we have, with the highest being 2.29199, this suggests that test scores schools vary quite a bit relative to fixed effects.
+
+We can also find the correlation between all the fixed effects, this helps us measure the correlation between coefficents. So, for a correlation close to 1 between two coefficients, if we repeated the study if one coefficient is now larger, we would expect that the other coefficient is also larger, this would be  the opposite (i.e. one gets larger other gets smaller) if correlation is close to -1. We can see that none of the correlations between coefficients have a value past $\pm0.5$, this would suggest that we would likely not have clear strong correlations between most of the covariate coefficients, with the largest number being 0.494. However, since about 1/3 of the correlations we have numbers greater than 0.1, this would imply that there may be some weak correlation between some of the coefficients, such as between `mean_iq` and `mean_ses` coefficients.
+
+In the 95% confidence intervals we can notice that we have two more CIs for the standard deviation of the random effect `school` and our residuals, `sig01` and `sigma`. These CIs are the reasonable range of values for the standard deviations, and thus variance, for their respective parameter. Therefore, if we look at our CI for `sig01`, we have n interval from . Since the CIs are not close to 0, and do not contain 0, this suggests that there may be some added effects from the random effect in our model, as we do indeed have some variation between schools on the end-of-year language test scores for 8th graders. For the rest of the CIs, we can interpret them like we did inpart d) We can also notice that with our CI being between roughly 2 to 3.5 standard deviations, `school` overlaps or is has a greater interval than our other covariates, suggesting that our random effect may affect our response variable to an equal or greater extent than our other fixed effects.
+
+### Question 1f
+**Briefly describe similarities and differences between the coefficients of the fixed effects in the results from 1d and 1e and what causes the differences. You may wish to use the use summaries of the data to help you. See the example code document.**
+
+*Solution:*
+
+```{r, message=FALSE }
+#Range of confints
+School_lm_range <- confint(School_lm)[,2]-confint(School_lm)[,1]
+School_linmixed_range <- (confint(School_linmixed)[,2]-confint(School_linmixed)[,1])[3:9]
+
+School_linmixed_range/School_lm_range
+```
+
+From looking at our outputs for both we can see that our point estimates are relatively similar between the two models for our coefficients. In addition, we can also see that the signs of our coefficients have not changed, and this fact also applies to our CIs, with every value having the same sign in both models. Furthermore, based on the confidence intervals and point estimates in both models, we would still reach the same general conclusions about our covariates, where we would see a positive association for test scores with `iq`, `sex`, `ses` and `mean_iq`, a negative association with `mean_ses` and no association with `minority_status`. 
+
+Where we see the differences between our two models is when we look at our confidence intervals for our coefficients. We can see that some of our CIs remained relatively similar, but our CIs for our intercept, `mean_ses`, and `mean_iq` got larger/wider. We can see this in the code above, which saw our ranges for our intercept, `mean_ses`, and `mean_iq` increase by about 50%, 70%, and 70%, while the others didn't have such large changes. The main reason for our differences is the assumption of non-independence for part e), this is because this assumption in part e) assesses our model for smaller sample sizes at our grouping level, since we have to account for schools now. As a result of our assumption, we effectively have a smaller sample size for our variables `mean_iq` and `mean_ses`, as multiple students from the same school will have the same observed mean. We know that if we have a smaller sample size, we would expect a relatively large increase in the size of our confidence interval, i.e. our CI gets wider, because we have less data to base it on, and thus we would be less precise/sure of the range of reasonable values. As well, due to our CIs/estimates being wider for our mean iq and ses variables, this affects our interept which is why we also see an increase in our CI for our intercept.
+
+### Question 1g
+**Plot the random effects for the different schools. Does it seem reasonable to have included these random effects?**
+
+*Solution:*
+
+```{r}
+school_random_effects <- lme4::ranef(School_linmixed, condVar=TRUE)
+
+ranef_df <- as.data.frame(school_random_effects)
+ranefplot <- ranef_df %>%
+  ggplot(aes(x = grp, y = condval, ymin = condval - 2*condsd, ymax = condval + 2*condsd)) + 
+  geom_point() + geom_errorbar() + coord_flip()
+
+ranefplot
+```
+
+From the random effect plot that we created, we can clearly see that there is variability between the schools' test scores. This plot compares the baseline measure of a specific school's test scores to the average, based on the difference, and as such we can see that since the data points do not all line up vertically at x = 0, we could conclude that there is large variability between schools. Furthermore, we also have the range of reasonable values for each school's point on our plot, i.e. the 95% confidence intervals, which can further our claim that there is large variability between school test scores. We can see that for most of our schools, their respective intervals do not overlap with a lot of the other schools intervals, suggesting that even for a range of reasonable values, the test scores for many of the schools are significantly different from many of the others. As a result, this conclusion about the CIs is further evidence supporting the large variability between schools in test scores for 8th graders on end-of-year language tests. 
+
+```{r}
+lmtest::lrtest(School_linmixed,School_lm)
+summary(aov(data = NewSchoolData, test~school))
+```
+
+In addition, we can also conduct an LR test to determine if our LMM is a better model than the model without accounting for schools, as well as an ANOVA to determine if there is a difference among schools and their test scores, which would suggest that further analysis on the groups may be required. We can see that for both tests, the p-values are less than 0.05 and extremely small, being <2.2e-16 and 2.55-05 respectively. This suggests that our inclusion of school as a random effect adds something to our conclusion without the random effect. As well, the ANOVA output means that if we grouped by schools we would see a statistically significant difference between at least one of the test scores, which provides some support for why we may want to add a random effect for further analysis as we would want to see what causes the difference.
+
+Therefore, since our LR test suggested the LMM is better than the model without random effects, the ANOVA suggests further analysis of the difference between schools, and we have large variability between test scores at different schools it seems reasonable for us to have included `school` as a random effect.
+
+### Question 1h
+**Write a short paragraph summarising, what you have learned from this analysis. Focus on answering the question of interest. Remember that interpreting confidence intervals is preferred to point estimates and make sure any discussion of p-values and confidence intervals are statistically correct. Also mention what proportion of the residual variation, after fitting the fixed effects, the differences between schools accounts for.**
+
+*Solution:*
+
+From our analysis above, we conducted 2 different model analysis on the variables are associated with Grade 8 students’ scores on an end-of-year language test, one regular linear regression, and one that takes into account the non-independence between students in schools. From our regular linear regression model, we concluded that the covariates of `iq`, `sex`, `ses`, and `mean_iq` seemed to have a positive association with our response variable of test scores, our covariate for `mean_ses` had a negative association, and our covariate `minority_status` had no clear association with the test scores. We concluded this from an interpretting the confidence intervals and point estimates, where we found the range of reasonable estimates, the CIs, and our best estimate, our point estimate, for our respective covariates, with the majority reasonable laying above 0, suggesting a positive association, one laying below 0, and one that could not be reasonable argued to not be 0. We also looked at the p-values for our model to provide further evidence that our estimates did truly have some association with test score, which we found that our aforemention covariates except `minority_status` did have some association with test scores. After conducting our linear model analysis, we conducted another analysis, this time assuming our data was non-independent, through a linear mixed model. For this, we suspected that school may have an effect on each of our students test scores as there are many factors related to school that could affect such scores. As such, we included school as a random effect in our LMM, and found similar results to our previous model, and ended up with the same conclusions as our linear regression model that assumed independence. In addition we concluded that our LMM had good evidence suggesting that adding the random effect of school was necessary for a better analysis, through an analysis of the random effects and different tests. We found in this LMM a school variance of 8.177, which means that 8.177/(8.177+38.240)*100 = 17.62% of the residual variance can be explained by the added effect of schools, which suggests that the random effect of school accounts for a moderate amount of our variation in test scores, with 1/5 of it being explained. Thus, in conclusion, through multiple models conducted on our data, we can provide a conclusion towards our question of interest, where the variables of `iq`, `sex`, `ses`, `mean_ses` and `mean_iq` have some sort of association with Grade 8 students’ scores on an end-of-year language test, whether that be a positive or negative one.
+
+## Question 2
+Data from the 2014 American National Youth Tobacco Survey is available on http://pbrown.ca/teaching/303/data, where there is an R version of the 2014 dataset `smoke.RData`, a pdf documentation file `2014-Codebook.pdf`, and the code used to create the R version of the data `smokingData.R`.
+
+You can obtain the data with:
+
+```{r, warning=FALSE, message=FALSE}
+smokeFile = "smokeDownload.RData"
+if (!file.exists(smokeFile)) {
+download.file("http://pbrown.ca/teaching/303/data/smoke.RData",
+smokeFile)
+}
+(load(smokeFile))
+```
+
+
+The `smoke` object is a `data.frame` containing the data, the `smokeFormats` gives some explanation of the variables. The `colName` and `label` columns of `smokeFormats` contain variable names in `smoke` and descriptions respectively.
+
+```{r}
+smokeFormats[smokeFormats[, "colName"] == "chewing_tobacco_snuff_or",
+c("colName", "label")]
+## colName
+## 151 chewing_tobacco_snuff_or
+## label
+## 151 RECODE: Used chewing tobacco, snuff, or dip on 1 or more days in the past 30 days
+```
+
+Consider the following model and set of results
+
+```{r glmmTMB}
+# get rid of 9, 10 year olds and missing age and race
+smokeSub = smoke[which(smoke$Age > 10 & !is.na(smoke$Race)),]
+smokeSub$ageC = smokeSub$Age - 16
+
+library(glmmTMB)
+
+smokeModelT = glmmTMB(chewing_tobacco_snuff_or ~ ageC * Sex + 
+                      RuralUrban + Race + (1 | state/school), 
+                      data = smokeSub, family = binomial(link = "logit"))
+
+knitr::kable(summary(smokeModelT)$coef$cond, digits = 2)
+```
+
+Table 3: Output of `Pmisc::coefTable(smokeModelT)`
+
+```{r}
+knitr::kable(Pmisc::coefTable(smokeModelT)$table[,-1])
+```
+
+
+### Question 2a
+**Write down a statistical model corresponding to smokeModelT. Briefly explain the difference between this model and a generalized linear model.**
+
+*Solutions:*
+
+The statisistical model corresponding to smokeIT is described by the model below:
+
+$logit(\frac{\mu_{ijk}}{1+\mu_{ijk}}) = \bf{X}\beta + A_i+B_{ij}$
+
+Our model is a binomial or logistic regression model and uses a logit link function for our transformation, this can be seen with the code `family = binomial(link = "logit")`. This logit link means that our response variable is described as $log(\frac{\mu_{ijk}}{1+\mu_{ijk}})$, which is the probability of having used tobacco, snuff or dip in the past 30 days given the covariate factors X for the kth student in the jth school in the ith state. The covariates are the same as the last assignment with covariates for age(centered at age 16), sex (2 levels; male or female), rurality(2 levels; rural or urban), and race (6 levels; white, black, asian, native and pacific). We would also have dummy variables for our covariates as well, which would correspond to whether the subject is part of the category or not, with 1 being if they were and 0 being they are not part of it. Thus, so far we have basically had the same model as the generalized linear model from the previous assignment. In addition, the $\beta$s are still the estimator coefficients for each of the covariates. However, for our model now, we also have an additional interaction between age and sex as an additional predictor, where we look at whether the outcome of one of the variables, age, is dependent on the other, which would be sex in this case, and the resulting estimate is the change in our response for every unit increase in age for the specific sex, which would be females in this case. For the most part we would be able to do what we have discussed so far in a regular GLM, so now we discuss what differs.
+
+The main reason for how our GLMM regression differs from the GLM is the addition of random effects due to non-independence. Although both models allow us to model data where the response follows a non-normal distribution, the GLM assumes independence for our observations while the GLMM does not. In our model we have a random effect of the states and the schools nested within the states as random intercepts, as we would expect tobacco usage to not be independent within different states/schools. These effects are represented by $A_i \text{ and } B_{ij}$, where the first is the effect for the states and the second is the schools in those states. These random effects are the main difference between the two model equations, whereby our fixed effects were mostly the same as when we did the GLM for the data, but we now have additional random effects to account for our non-independence. 
+
+### Question 2b
+**Briefly explain why this generalized linear mixed model with a logit link is more appropriate for this dataset than a linear mixed model.**
+
+*Solution:*
+
+A generalized mixed model with a logit link seems more appropriate for the data set than an linear mixed mode, because the GLMM incorporates aspects of both GLMs and LMMs as a model. First, we suspect that our observations will not be independent, since we measured students from the same schools within the same states, and thus we would want to use a mixed model, i.e. an LMM, with both fixed and random effects. This requirement is satisfied in both GLMM and LMM, since both use random effects to account for the non-independence, thus so far both models seem appropriate. However, now a problem with LMM arises as we want to find the probability of something occuring, i.e. using tobacco, snuff or dip in the last 30 days, given some covariates. This would mean that our response will not follow a normal distribution, it would likely be a binomial/logistic one and as such we would want to transform our response. If the data was independent we would typically find that a glm with logit link is better than a regular LM as an analysis, as we discovered in the previous assignment. However, since we suspect it would not be independent, we cannot use a regular GLM, but also want to account for that non-independence, hence a mixed model. Thus, with our analysis we want some aspects of the LMM, such as the random effects analysis for non-independent observations, and some aspects of a GLM, such as the use of the logit link for a non-normal response. This is exactly what the GLMM helps us with, as it is a model that combines characteristics of LMMs and GLMs. So, because we need to account for both non-normally distributed responses, and non-independent observations, a GLMM with a logit link function would seem most appropriate for this data, so GLMM is more appropriate than just a LMM.
+
+### Question 2c
+**Write a paragraph assessing the hypothesis that state-level differences in chewing tobacco usage amongst high school students are much larger than differences between schools within a state. If one was interested in identifying locations with many tobacco chewers (in order to sell chewing tobacco to children, or if you prefer to implement programs to reduce tobacco chewing), would it be important to find individual schools with high chewing rates or would targeting those states where chewing is most common be sufficient?**
+
+```{r}
+Pmisc::ranefPlot(smokeModelT, grpvar = "state", level = 0.5, maxNames = 12)
+Pmisc::ranefPlot(smokeModelT, grpvar = "school:state", level = 0.5,maxNames = 12, xlim = c(-1, 2.2))
+```
+
+*Solution:*
+
+From looking at the outputs, the hypothesis that the state-level differences in chewing tobacco usage are larger than school-level differences within states seems incorrect due to a few reasons. The first reason is based on the random effect plots for both states and schools within states. From those plots we can see that there is evidence that there is variability between states for tobacco use. We know this as the intervals in our plot for states do not overlap with a majority of the other intervals, and the curve for the states seems to lie within the range of about -0.4 to 0.4. On the other hand, if we look at the school plot, we can clearly see that the curve is skewed towards the right side of the random effect plot. As well, the range for the school plot falls within about -1.0 to 2.0, with a much larger tail on the right of our plot, i.e. right of 0, which clearly indicates that there is much larger variability between schools within states as we have much larger positive differences. In addition to looking at the graphs, we can also look at table 3 for further analysis. On that table, we can see that we have a CI of 0.59 to 0.95 with a point estimate of 0.75 for our school level variability and a CI of 0.13 to 0.74 with a point estimate of 0.31 for our state level variability. We can see that our CIs do overlap, we can clearly see that the variability for school can potentially be greater than out state variability. Although we cannot conclude with reasonable certainty that our variability at the state level is greater that our school level, the fact that our our CI is generally larger for school variability and our point estimate is clearly larger than the state, this provides us with some small sense that variability can be greater between schools within states rather than between states.
+
+```{r}
+SmokeGLMMstate <- glmmTMB(chewing_tobacco_snuff_or ~ ageC * Sex + RuralUrban + Race + (1 | state),
+                          data = smokeSub)
+
+lmtest::lrtest(SmokeGLMMstate,smokeModelT)
+```
+
+We can also conduct a LR test for a GLMM that only accounts for state differences and our model which accounts for school differences as well as state differences. This can be seen above and we see that the p-value for the test is very significant, thus this implies that our more complex model that accounts for school is better than our simpler model at explaining our conclusion, which would provide some further support for which of the two differences we want to look at, since we would have more precise and accurate conclusions about the data at the school-wide level. Thus, based on our output and analysis if we wanted to identify locations with many tobacco chewers, I would likely find individuals at the school-wide level as that is where we see the most variability. Larger positive variability would be what we want to target since that means that we have a much larger number of students that would chew tobacco on the school-wide level. Thus, it seems likely that targeting states with higher tobacco chewers wouldn't be sufficient if we are trying to identify places with a high number chewers, and we would need to target individual schools.
+
+
+## Question 3
+The dataset below is a subset of the data from www.gov.uk/government/statistical-datasets/ras30-reported-casualties-in-road-accidents, with all of the road traffic accidents in the
+UK from 1979 to 2015. The data below consist of all pedestrians involved in motor vehicle
+accidents with either fatal or slight injuries (pedestrians with moderate injuries have been
+removed).
+```{r}
+#install.packages("R.utils")
+
+pedestrianFile = "pedestrians.rds"
+if (!file.exists(pedestrianFile)) {
+pedestrianFile = Pmisc::downloadIfOld('http://pbrown.ca/teaching/303/data/pedestrians.rds')
+}
+
+#pedestrianFile = Pmisc::downloadIfOld('http://pbrown.ca/teaching/303/data/pedestrians.rds')
+pedestrians = readRDS(pedestrianFile)
+pedestrians = pedestrians[!is.na(pedestrians$time), ]
+pedestrians$y = pedestrians$Casualty_Severity == 'Fatal'
+
+dim(pedestrians)
+
+pedestrians[1:3, ]
+
+table(pedestrians$Casualty_Severity, pedestrians$sex)
+
+range(pedestrians$time)
+```
+
+Notice that men are involved in accidents more than women, and the proportion of accidents
+which are fatal is higher for men than for women. This might be due in part to women being
+more reluctant than men to walk outdoors late at night or in poor weather, and could also
+reflect men being on average more likely to engage in risky behaviour than women.
+A glm adjusting for weather and light conditions is below.
+
+```{r}
+theGlm = glm(y ~ sex + age + Light_Conditions + Weather_Conditions,
+             data = pedestrians, family = binomial(link = "logit"))
+knitr::kable(summary(theGlm)$coef, digits = 3)
+```
+
+Here’s another GLM with interactions.
+
+```{r}
+theGlmInt = glm(y ~ sex * age + Light_Conditions + Weather_Conditions,
+                data = pedestrians, family = binomial(link = "logit"))
+knitr::kable(summary(theGlmInt)$coef, digits = 3)
+```
+
+```{r, echo=FALSE}
+newData = expand.grid(
+age = levels(pedestrians$age),
+sex = c('Male', 'Female'),
+Light_Conditions = levels(pedestrians$Light_Conditions)[1],
+Weather_Conditions = levels(pedestrians$Weather_Conditions)[1])
+thePred = as.matrix(as.data.frame(
+predict(theGlmInt, newData, se.fit=TRUE)[1:2])) %*% Pmisc::ciMat(0.99)
+thePred = as.data.frame(thePred)
+thePred$sex =newData$sex
+thePred$age = as.numeric(gsub("[[:punct:]].*|[[:alpha:]]", "", newData$age))
+toPlot2 = reshape2::melt(thePred, id.vars = c('age','sex'))
+toPlot3 = reshape2::dcast(toPlot2, age ~ sex + variable)
+matplot(toPlot3$age, exp(toPlot3[,-1]),
+type='l', log='y', col=rep(c('black','red'), each=3),
+lty=rep(c(1,2,2),2),
+ylim = c(0.007, 0.11), xaxs='i',
+xlab= 'age', ylab='prob')
+legend('topleft', lty=1, col=c('black','red'), legend = c('male','female'), bty='n')
+```
+
+Figure 2: Predicted probability of being a case in baseline conditions (daylight, fine no wind)
+with 99% CI using theGlmInt
+
+### Question 3a
+**Write a short paragraph describing a case/control model (not the results) corresponding the `theGlm` and `theGlmInt` objects. Be sure to specify the case definition and the control group, and what the covariates are.**
+
+*Solution:*
+
+If we wanted to do a case/control study, we must define our two different groups for our model. We know that for this model, every subject/observation in the model has experienced an accident and we want to assess the injuries, with varying degrees, but we are only interested in two types, slight injuries and fatal injuries. In general, we would consider the more severe version of what we are looking at as our case group and thus, that means the our control group is those with slight injuries and our case is those with fatal. In this model, our response variable is one of two options, a `TRUE` or `FALSE`, for whether the person was in the case group, i.e. whether they had a fatal injury in the accident, based on some covariates. For the model `theGlm`, we have covariates for sex (2 levels; Male or Female), light conditions (5 levels; daylight, dark with lights lit, dark without lights, dark no lighting and dark with unknown lighting), weather conditions (7 levels;Fine weather with and without high winds, raining with and without high winds, snowing with and without high winds, and fog or mist) and age (11 levels; ages range from 0-5, 6-10, 11-15, 16-20, 21-25, 26-35, 36-45, 46-55, 56-65, 66-75, and over 75). Similarly, for the model `theGlmInt`, we have the same covariates described before, however we now have an interaction between the covariates `age` and `sex`, meaning in our model we will have estimates for individuals who would've fallen into both covariates rather than just looking at one covariate at a time. Due to the interaction our model now has 10 additional coefficient estimates for the interaction of the two covariates, where the interaction between females aged 26-35 is incorporated into our intercept, and we have estimates for females that fall within the remaining 10 levels for age.
+
+### Question 3b
+**Write a short report assessing whether the UK road accident data are consistent with the hypothesis that women tend to be, on average, safer as pedestrians than men, particularly as teenagers and in early adulthood. Explain which of the two models fit is more appropriate for addressing this research question.**
+
+*Solution:*
+
+To assess whether the UK road accident data is consistent with the hypothesis that women tend to be, on average, safer as pedestrians than men, particularly as teenagers and in early adulthood we can look at the output from the `theGlmInt` model. `theGlmInt` would be more appropriate since the interaction tells us the change on the response for every unit increase in one covariate dependent on another, and in our case, we want to examine the effect that being a female at specific age ranges has on the number of injuries/safety. Thus, looking at the table 6, females in both models had a `est` value of 0.76 and 0.58, meaning that in the first model females have a $(1-0.76)*100 = 24%$ lower chances than our reference group of having a fatal accident. Similarly for the second model we would have a $(1-0.58)*100 = 42%$ lower odds than males that are part of our reference group (that being males aged 26-35 who were part of our case group, i.e. experienced fatal injuries from accidents, in the daylight during fine weather with no wind). It should be noted that these percentages are for just purely being a female in both our models, and we can clearly see that in either model women would generally have a lower odds, even looking at our CI for these estimates being 0.74-0.78 and 0.53-0.63, respectively, meaning that we have reasonable certainty that women would generally tend to be safer than our reference group of males just from purely being a woman. If we are particularly interested in a specific age group we can only look at our second model `theGlmInt`, in this case we consider teenagers to be the ages of 11-20 and early adults to be from ages 21-25. We can see in table 6 that our interaction estimates for females in our age ranges have point estimates of 1.33, 1.16 and 0.96, and 95% confidence intervals of 1.18-1.50, 1.03-1.31, and 0.84-1.10 respectively for the odds ratios. These values and ranges give us a reasonable range of certainty that suggests that teenage females would be 33% and 16% more likely to be part of our case group than the males in our reference group, which is contrary to what our hypothesis proposes. In the case of early adult females, we don't really have clear reasonable certainty for whether they would be safer, as our CI contains 1, meaning that within our reasonable estimates for the odds ratio, women in early adulthood may be more or less likely to be part of our case group than our reference group males. 
+
+Furthermore, if we look at the other tables we can see positive values for the teenage females with estimates of 0.286, 0.15 and p-values of 0.000 and 0.016, suggesting that our data has statistically significant evidence that teenage females would have a coefficient estimate that is not zero. On the other hand we can see that the early adult females have an estimate of -0.041, with a p-value of 0.551, suggesting that we do not have enough statistically significant evidence in our data to say that this estimate is non-zero, which corroborates our claims from before. We can also look at the graph in Figure 2 and see that between the ages of 10-20, i.e. the teenage years, our lines for male and females are not parallel. If they were, this would suggest that our predicted probability of being in the case group during our baseline conditions change at the same rate for males and females, however this is not the case for teenagers. As well, we can also notice that our line for females generally does seem to be lower than males, meaning that in general it seems that females do seem more safer, as they are predicted to be lower in probability to be part of our case group. As mentioned in the assignment it can also bee seen that the proportion of males involved in fatal accidents seem to be higher than females with proportions of 3.7% for males vs the 3.1% for females.  Thus, from our models it seems that in general women do tend to be safer than males on average for most age groups. However, once we look at the specific age groups of teenage females, we see that it seems that males are safer than females, and for early adults, females are more or less likely to be part of the case group, so it seems they are likely to be just as safe.
+
+
+### Question 3c
+**It is well established that women are generally more willing to seek medical attention for health problems than men, and it is hypothesized that men are less likely than women to report minor injuries caused by road accidents. Write a critical assessment of whether or not the control group is a valid one for assessing whether women are on average better at road safety than man.**
+
+*Solution:*
+
+Assuming that women are more likely to report than men, I would suspect that our control group, the slight injuries, would not be a valid group for assessing whether women are on average better at road safety than men. This is because one of our assumptions for case/control models is that inclusion in the study we are looking at is not dependent on any covariates, which in this case is violated as one of our covariates is sex. So, if women are more likely to seek medical attention for health problems than men, then they would have been more likely to seek help for the slight injury from the car accident, and would naturally be more likely to be included in the study. As a result we would have an over-representation of women in the control group, and thus our conclusions may not be valid, or as strong, due to the violated assumption. Therefore, since our question of interest is heavily based on our covariate of sex, it would be difficult to argue that our assumptions are reasonably met, so in the end it seems that our control group of slightly injured individuals would not be valid.
+
+
+
+
+
+
+
